@@ -6,7 +6,7 @@ namespace SleepyDiscord {
 	typedef GenericUDPClient* (*const CustomInitUDPClient)();
 
 	class CustomUDPClient : public GenericUDPClient {
-	protected:
+	public:
 		static CustomInitUDPClient init;
 		CustomUDPClient() : client(init()) {}
 		inline bool connect(const std::string& to, const uint16_t port) override {

@@ -185,7 +185,7 @@ namespace SleepyDiscord {
 
 		inline void setAudioOutput(BaseAudioOutput*& output) {
 			audioOutput = std::unique_ptr<BaseAudioOutput>(output);
-		} 
+		}
 
 		inline const bool hasAudioOutput() {
 			return audioOutput != nullptr;
@@ -249,7 +249,7 @@ namespace SleepyDiscord {
 			RESUMED             = 9,  //server acknowledge Resume
 			CLIENT_DISCONNECT   = 13  //server a client has disconnected from the voice channel
 		};
-			
+
 		enum State : uint8_t {
 			NOT_CONNECTED = 0 << 0,
 			CONNECTED     = 1 << 0,

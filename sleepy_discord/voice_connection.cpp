@@ -5,7 +5,7 @@
 
 namespace SleepyDiscord {
 	VoiceConnection::VoiceConnection(BaseDiscordClient* client, VoiceContext& _context) :
-		origin(client), context(_context), UDP(*origin), sSRC(0), port(0), nextTime(0),
+		origin(client), context(_context), sSRC(0), port(0), nextTime(0),
 #if !defined(NONEXISTENT_OPUS)
 		encoder(nullptr), decoder(nullptr),
 #endif
@@ -196,10 +196,10 @@ namespace SleepyDiscord {
 		*/
 		std::string heartbeat;
 		heartbeat.reserve(17 + nonce.length());
-		heartbeat += 
+		heartbeat +=
 			"{"
 				"\"op\": 3, "
-				"\"d\": "; heartbeat += nonce; heartbeat += 
+				"\"d\": "; heartbeat += nonce; heartbeat +=
 			'}';
 		origin->send(heartbeat, connection);
 
@@ -369,11 +369,11 @@ namespace SleepyDiscord {
 			static_cast<uint8_t>((sSRC      >> (8 * 1)) & 0xff),
 			static_cast<uint8_t>((sSRC      >> (8 * 0)) & 0xff),
 		};
-			
+
 		uint8_t nonce[nonceSize];
 		std::memcpy(nonce                , header, sizeof header);
 		std::memset(nonce + sizeof header,      0, sizeof nonce - sizeof header);
-		
+
 		const size_t numOfBtyes = sizeof header + length + crypto_secretbox_MACBYTES;
 		std::vector<uint8_t> audioDataPacket(numOfBtyes);
 		std::memcpy(audioDataPacket.data(), header, sizeof header);
@@ -434,7 +434,7 @@ namespace SleepyDiscord {
 		if (isForged)
 			return;
 		//decode
-		constexpr opus_int32 frameSize = 
+		constexpr opus_int32 frameSize =
 			static_cast<opus_int32>(AudioTransmissionDetails::proposedLength());
 		BaseAudioOutput::Container decodedAudioData;
 		opus_int32 decodedAudioLength = opus_decode(
