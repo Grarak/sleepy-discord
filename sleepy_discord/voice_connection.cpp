@@ -222,11 +222,6 @@ namespace SleepyDiscord {
 	void VoiceConnection::startSpeaking() {
 		if ((state & State::ABLE) != State::ABLE) return;
 
-		//init libraries if havn't and not encoded data
-		//init sodium
-		if (sodium_init() < 0)
-			return;
-
 		if (!audioSource->isOpusEncoded())
 #if defined(NONEXISTENT_OPUS)
 			return;
