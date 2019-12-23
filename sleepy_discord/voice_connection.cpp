@@ -43,9 +43,8 @@ namespace SleepyDiscord {
 			opus_encoder_destroy(encoder);
 			encoder = nullptr;
 		}
-		if (decoder != nullptr) {
-			opus_decoder_destroy(decoder);
-			decoder = nullptr;
+		if (decoder) {
+			decoder.reset();
 		}
 		state = static_cast<State>(state & ~State::CONNECTED);
 	}
@@ -81,7 +80,7 @@ namespace SleepyDiscord {
 		json::Value& d = values["d"];
 		switch (op) {
 		case HELLO: {
-			heartbeatInterval = d["heartbeat_interval"].GetInt();
+			heartbeatInterval = d["heartbeat_interval"].GetDouble();
 
 			//Don't sent a identity during resumes
 			if (state & OPEN)
@@ -127,9 +126,13 @@ namespace SleepyDiscord {
 			packet[3] = (sSRC      ) & 0xff;
 			UDP.send(packet, 70);
 			UDP.receive([&](const std::vector<uint8_t>& iPDiscovery) {
-				//find start of string. 0x60 is a bitmask that should filter out non-letters
-				std::vector<uint8_t>::const_iterator iPStart = iPDiscovery.begin() + 2;
-				const std::string iPAddress(iPStart, std::find(iPStart, iPDiscovery.end(), 0));
+				// Taken from JDA
+				// 4 leading bytes are nulls
+				// last 2 bytes are the port in little edian
+				size_t length = iPDiscovery.size();
+				std::string receiveHost = std::string(reinterpret_cast<const char *>(&iPDiscovery[4]));
+				uint16_t receivePort = (iPDiscovery[length - 2] & 0xff)
+					| ((iPDiscovery[length - 1] & 0xff) << 8);
 				//send Select Protocol Payload
 				std::string protocol;
 				/*The number 101 comes from the number of letters in this string + 1:
@@ -137,15 +140,15 @@ namespace SleepyDiscord {
 					"address": "","port": 65535,
 					"mode": "xsalsa20_poly1305"}}}
 				*/
-				protocol.reserve(101 + iPAddress.length());
+				protocol.reserve(101 + receiveHost.length());
 				protocol +=
 					"{"
 						"\"op\": 1," //VoiceOPCode::SELECT_PROTOCOL
 						"\"d\": {"
 							"\"protocol\": \"udp\","
 							"\"data\": {"
-								"\"address\": \""; protocol += iPAddress           ; protocol += "\","
-								"\"port\": "     ; protocol += std::to_string(port); protocol +=   ","
+								"\"address\": \""; protocol += receiveHost                ; protocol += "\","
+								"\"port\": "     ; protocol += std::to_string(receivePort); protocol +=   ","
 								"\"mode\": \"xsalsa20_poly1305\""
 							"}"
 						"}"
@@ -172,9 +175,15 @@ namespace SleepyDiscord {
 				context.eventHandler->onSpeaking(*this);
 		case RESUMED:
 			break;
-		case HEARTBEAT_ACK:
+		case HEARTBEAT:
+			send_heartbeat(false);
+			break;
+		case HEARTBEAT_ACK: {
+			time_t previous_time = d.GetUint64();
 			if (context.eventHandler != nullptr)
-				context.eventHandler->onHeartbeatAck(*this);
+				context.eventHandler->onHeartbeatAck(*this,
+					origin->getEpochTimeMillisecond() - previous_time);
+			}
 			break;
 		default:
 			break;
@@ -187,28 +196,30 @@ namespace SleepyDiscord {
 	}
 
 	void VoiceConnection::heartbeat() {
-		//timestamp int
-		const uint64_t bitMask52 = 0x1FFFFFFFFFFFFF;
-		const uint64_t currentTime = static_cast<uint16_t>(origin->getEpochTimeMillisecond());
-		const std::string nonce = std::to_string(bitMask52 & currentTime);
-		/*The number 17 comes from the number of letters in this string + 1:
-		{"op": 3, "d": }
-		*/
-		std::string heartbeat;
-		heartbeat.reserve(17 + nonce.length());
-		heartbeat +=
-			"{"
-				"\"op\": 3, "
-				"\"d\": "; heartbeat += nonce; heartbeat +=
-			'}';
-		origin->send(heartbeat, connection);
-
-		if (context.eventHandler != nullptr)
-			context.eventHandler->onHeartbeat(*this);
-
+		send_heartbeat(true);
 		heart = origin->schedule([this]() {
 			this->heartbeat();
 		}, heartbeatInterval);
+	}
+
+	void VoiceConnection::send_heartbeat(bool includeUDP) {
+		std::string currentTime = std::to_string(origin->getEpochTimeMillisecond());
+		std::string heartbeat;
+		heartbeat.reserve(17 + currentTime.length());
+		heartbeat +=
+			"{"
+				"\"op\": 3, "
+				"\"d\": "; heartbeat += currentTime; heartbeat +=
+			'}';
+		origin->send(heartbeat, connection);
+
+		if (includeUDP) {
+			uint8_t udpPacket[] = {0xC9, 0, 0, 0, 0, 0, 0, 0, 0};
+			UDP.send(udpPacket, 9);
+		}
+
+		if (context.eventHandler != nullptr)
+			context.eventHandler->onHeartbeat(*this);
 	}
 
 	inline void VoiceConnection::scheduleNextTime(AudioTimer& timer, TimedTask code, const time_t interval) {
@@ -386,16 +397,10 @@ namespace SleepyDiscord {
 
 	//To do test this
 	void VoiceConnection::startListening() {
-		if (!(state & CAN_DECODE) || decoder == nullptr) {
-			int opusError = 0;
-			decoder = opus_decoder_create(
-				/*Sampling rate(Hz)*/AudioTransmissionDetails::bitrate(),
-				/*Channels*/         AudioTransmissionDetails::channels(),
-				&opusError);
-			if (opusError) {//error check
-				return;
-			}
+		if (!(state & CAN_DECODE) && !decoder) {
+			decoder = std::make_unique<CustomOpusDecoder>();
 		}
+		listenTimer.nextTime = origin->getEpochTimeMillisecond();
 		listen();
 	}
 
@@ -411,32 +416,64 @@ namespace SleepyDiscord {
 		);
 	}
 
+	int VoiceConnection::getPayloadOffset(const uint8_t* data, int csrcLength) const {
+        // headerLength defines number of 4-byte words in the extension
+        int16_t headerLength = (data[rtpHeaderLength + 2 + csrcLength] << 8)
+			| (data[rtpHeaderLength + 2 + csrcLength + 1] & 0xff);
+        size_t i = rtpHeaderLength // RTP header = 12 bytes
+                + 4                    // header which defines a profile and length each 2-bytes = 4 bytes
+                + csrcLength           // length of CSRC list (this seems to be always 0 when an extension exists)
+                + headerLength * 4;    // number of 4-byte words in extension = len * 4 bytes
+
+        // strip excess 0 bytes
+        while (data[i] == 0) ++i;
+        return i;
+    }
+
+	// Taken from JDA
+	size_t VoiceConnection::getRTPOffset(const uint8_t* data) const {
+		bool hasExtension = (data[0] & 0x10) != 0;
+		uint8_t cc = data[0] & 0x0f;
+		size_t csrcLength = cc * 4;
+		uint16_t extension = hasExtension ?
+			(data[rtpHeaderLength + csrcLength] << 8) | (data[rtpHeaderLength + csrcLength + 1] & 0xff) : 0;
+		size_t offset = rtpHeaderLength + csrcLength;
+		if (hasExtension && extension == discordRTPExtension) {
+			offset = getPayloadOffset(data, csrcLength);
+		}
+		return offset;
+	}
+
 	void VoiceConnection::processIncomingAudio(const std::vector<uint8_t>& data)
 	{
 #if !defined(NONEXISTENT_SODIUM) || !defined(NONEXISTENT_OPUS)
+		size_t offset = getRTPOffset(data.data());
+
 		//get nonce
 		uint8_t nonce[nonceSize];
-		std::memcpy(nonce, data.data(), sizeof nonce);
+		std::memset(nonce + rtpHeaderLength, 0, nonceSize - rtpHeaderLength);
+		std::memcpy(nonce, data.data(), rtpHeaderLength);
+
 		//decrypt
-		std::vector<uint8_t> decryptedData;
-		const std::size_t decryptedDataSize = data.size() - sizeof nonce;
-		decryptedData.reserve(decryptedDataSize);
+		size_t decryptedDataSize = data.size() - offset - crypto_box_MACBYTES
+			+ rtpHeaderLength; // RTP Header need to prepend it later
+		uint8_t decryptedData[decryptedDataSize];
+
 		bool isForged = crypto_secretbox_open_easy(
-			decryptedData.data(),
-			data.data() + sizeof nonce,
-			decryptedDataSize, nonce, secretKey
+			decryptedData + rtpHeaderLength, data.data() + offset, data.size() - offset, nonce, secretKey
 		) != 0;
 		if (isForged)
 			return;
+		std::memcpy(decryptedData, data.data(), rtpHeaderLength); // Prepend RTP Header to decrypted data
+		size_t decrypted_offset = getRTPOffset(decryptedData);
 		//decode
-		constexpr opus_int32 frameSize =
-			static_cast<opus_int32>(AudioTransmissionDetails::proposedLength());
 		BaseAudioOutput::Container decodedAudioData;
-		opus_int32 decodedAudioLength = opus_decode(
-			decoder, decryptedData.data(), static_cast<int>(decryptedData.size()),
-			decodedAudioData.data(), frameSize, 1);
-		if(decodedAudioLength < OPUS_OK || !hasAudioOutput())
+
+		int ret = decoder->decodeOpus(decryptedData + decrypted_offset, decryptedDataSize - decrypted_offset,
+			decodedAudioData.data());
+		if (ret != 0 || !hasAudioOutput())
 			return;
+
 		AudioTransmissionDetails details(context, 0);
 		audioOutput->write(decodedAudioData, details);
 #endif

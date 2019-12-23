@@ -10,6 +10,8 @@ namespace SleepyDiscord {
 		typedef std::function<void()> SendHandler;
 		typedef std::function<void(const std::vector<uint8_t>&)> ReceiveHandler;
 
+		virtual ~GenericUDPClient() = default;
+
 		virtual bool connect(const std::string& to, const uint16_t port) = 0;
 		virtual void send(
 			const uint8_t* buffer,

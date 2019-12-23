@@ -12,6 +12,7 @@
 #include "channel.h"
 #include "message_receiver.h"
 #include "timer.h"
+#include "custom_opus_decoder.h"
 
 namespace SleepyDiscord {
 	using AudioSample = int16_t;
@@ -27,7 +28,7 @@ namespace SleepyDiscord {
 		virtual void onEndSpeaking(VoiceConnection&) {}
 		virtual void onFinishedSpeaking(VoiceConnection&) {}
 		virtual void onHeartbeat(VoiceConnection&) {}
-		virtual void onHeartbeatAck(VoiceConnection&) {}
+		virtual void onHeartbeatAck(VoiceConnection&, const time_t) {}
 	};
 
 	struct VoiceContext {
@@ -284,13 +285,15 @@ namespace SleepyDiscord {
 		std::size_t samplesSentLastTime = 0;
 		time_t nextTime = 0;
 		OpusEncoder *encoder = nullptr;
-		OpusDecoder *decoder = nullptr;
+		std::unique_ptr<CustomOpusDecoder> decoder;
 		uint16_t sequence = 0;
 		uint32_t timestamp = 0;
 
 		#define SECRET_KEY_SIZE 32
 		unsigned char secretKey[SECRET_KEY_SIZE];
 		static constexpr int nonceSize = 24;
+		static constexpr int rtpHeaderLength = 12;
+		static constexpr uint16_t discordRTPExtension = 0xBEDE;
 
 		//to do use this for events
 		template<class... Types>
@@ -299,6 +302,7 @@ namespace SleepyDiscord {
 				((*context.eventHandler).*member)(arguments...);
 		}
 		void heartbeat();
+		void send_heartbeat(bool includeUDP);
 		inline void scheduleNextTime(AudioTimer& timer, TimedTask code, const time_t interval);
 		inline void stopSpeaking() {
 			state = static_cast<State>(state & ~SENDING_AUDIO);
@@ -312,6 +316,9 @@ namespace SleepyDiscord {
 		);
 		void listen();
 		void processIncomingAudio(const std::vector<uint8_t>& data);
+
+		int getPayloadOffset(const uint8_t* data, int csrcLength) const;
+		size_t getRTPOffset(const uint8_t* data) const;
 	};
 
 	struct BasicAudioSourceForContainers : public BaseAudioSource {

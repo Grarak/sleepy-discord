@@ -3,5 +3,6 @@
 
 namespace SleepyDiscord {
 	struct GenericWebsocketConnection {
+		virtual ~GenericWebsocketConnection() = default;
 	};
 }

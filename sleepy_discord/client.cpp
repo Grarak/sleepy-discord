@@ -22,7 +22,7 @@ namespace SleepyDiscord {
 			setError(CANT_SCHEDULE);
 			return;
 		}
-		
+
 		ready = false;
 		quiting = false;
 		bot = true;
@@ -277,7 +277,7 @@ namespace SleepyDiscord {
 #endif
 		std::string identity;
 		identity.reserve(272); //remember to change this number when editing identity
-		identity += 
+		identity +=
 		"{"
 			"\"op\":2,"
 			"\"d\":{"
@@ -293,7 +293,7 @@ namespace SleepyDiscord {
 		if (shardCount != 0 && shardID <= shardCount) {
 			identity +=
 				"\"shard\":[";
-			identity +=	
+			identity +=
 					std::to_string(shardID); identity += ",";
 			identity +=
 					std::to_string(shardCount);
@@ -499,7 +499,7 @@ namespace SleepyDiscord {
 						foundChannel = channel;
 					}
 				);
-				onEditChannel(d); 
+				onEditChannel(d);
 				} break;
 			case hash("CHANNEL_DELETE"             ): {
 				Channel channel = d;
@@ -524,7 +524,7 @@ namespace SleepyDiscord {
 #ifdef SLEEPY_VOICE_ENABLED
 				if (!waitingVoiceContexts.empty()) {
 					auto iterator = find_if(waitingVoiceContexts.begin(), waitingVoiceContexts.end(),
-						[&state](const VoiceContext* w) { 
+						[&state](const VoiceContext* w) {
 						return state.channelID == w->channelID && w->sessionID == "";
 					});
 					if (iterator != waitingVoiceContexts.end()) {
@@ -565,7 +565,7 @@ namespace SleepyDiscord {
 			case hash("MESSAGE_REACTION_ADD"       ): onReaction          (d["user_id"], d["channel_id"], d["message_id"], d["emoji"]); break;
 			case hash("MESSAGE_REACTION_REMOVE"    ): onDeleteReaction    (d["user_id"], d["channel_id"], d["message_id"], d["emoji"]); break;
 			case hash("MESSAGE_REACTION_REMOVE_ALL"): onDeleteAllReaction (d["guild_id"], d["channel_id"], d["message_id"]); break;
-			default: 
+			default:
 				setError(EVENT_UNKNOWN);
 				onError(ERROR_NOTE, json::toStdString(t));
 				break;
@@ -633,7 +633,7 @@ namespace SleepyDiscord {
 
 	void BaseDiscordClient::heartbeat() {
 		if (heartbeatInterval <= 0 || isQuiting()) return; //sanity test
-		
+
 		//if time and timer are out of sync, trust time
 		time_t currentTime = getEpochTimeMillisecond();
 		time_t nextHeartbest;
@@ -658,7 +658,7 @@ namespace SleepyDiscord {
 		std::string heartbeat;
 		//The number 18 comes from 1 plus the length of {\"op\":1,\"d\":}
 		heartbeat.reserve(18 + str.length());
-		heartbeat += 
+		heartbeat +=
 			"{"
 				"\"op\":1,"
 				"\"d\":"; heartbeat += str; heartbeat +=
@@ -726,7 +726,7 @@ namespace SleepyDiscord {
 		endpoint.reserve(12 + givenEndpoint.length());
 		endpoint += "wss://";
 		endpoint += givenEndpoint;
-		endpoint += "/?v=3";
+		endpoint += "/?v=4";
 
 		//Add a new connection to the list of connections
 		voiceConnections.emplace_front( this, context );
