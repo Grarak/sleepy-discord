@@ -520,6 +520,9 @@ namespace SleepyDiscord {
 
 		std::list<VoiceConnection> voiceConnections;
 
+		void quit(bool isRestarting, bool isDisconnected = false);
+		void restart();
+
 	private:
 		using GenericMessageReceiver::initialize;
 
@@ -559,8 +562,6 @@ namespace SleepyDiscord {
 		Timer reconnectTimer;
 		void sendIdentity();
 		void sendResume();
-		void quit(bool isRestarting, bool isDisconnected = false);
-		void restart();
 		void disconnectWebsocket(unsigned int code, const std::string reason = "");
 		bool sendL(std::string message);    //the L stands for Limited
 		int64_t nextHalfMin = 0;

@@ -331,6 +331,7 @@ namespace SleepyDiscord {
 		//quit all voice connections
 		for (VoiceConnection& voiceConnection : voiceConnections)
 			voiceConnection.disconnect();
+		voiceConnections.clear();
 #endif
 		if (heart.isValid()) heart.stop(); //stop heartbeating
 		if (!isDisconnected) disconnectWebsocket(1000);
@@ -525,7 +526,7 @@ namespace SleepyDiscord {
 				if (!waitingVoiceContexts.empty()) {
 					auto iterator = find_if(waitingVoiceContexts.begin(), waitingVoiceContexts.end(),
 						[&state](const VoiceContext* w) {
-						return state.channelID == w->channelID && w->sessionID == "";
+						return state.channelID == w->channelID;
 					});
 					if (iterator != waitingVoiceContexts.end()) {
 						VoiceContext& context = **iterator;
@@ -677,11 +678,11 @@ namespace SleepyDiscord {
 	VoiceContext& BaseDiscordClient::createVoiceContext(Snowflake<Server> server, Snowflake<Channel> channel, BaseVoiceEventHandler * eventHandler) {
 		Snowflake<Server> serverTarget = server != "" ? server : getChannel(channel).cast().serverID;
 		voiceContexts.push_front({ serverTarget, channel, eventHandler });
-		waitingVoiceContexts.emplace_front(&voiceContexts.front());
 		return voiceContexts.front();
 	}
 
 	void BaseDiscordClient::connectToVoiceChannel(VoiceContext& voiceContext, VoiceMode settings) {
+		waitingVoiceContexts.emplace_front(&voiceContext);
 		std::string voiceState;
 		/*The number 131 came from the number of letters in this string:
 		  {"op": 4,"d" : {"guild_id": "18446744073709551615",

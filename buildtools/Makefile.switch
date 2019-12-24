@@ -37,6 +37,7 @@ ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 CFLAGS	:=	-g -Wall -O2 -ffunction-sections \
 			-DSLEEPY_ONE_THREAD -DSLEEPY_CUSTOM_SESSION -DSLEEPY_VOICE_ENABLED \
 			-DSLEEPY_CUSTOM_UDP_CLIENT -DEXISTENT_OPUS -DEXISTENT_SODIUM \
+			-DSLEEPY_USE_HARD_CODED_GATEWAY \
 			$(ARCH) $(DEFINES) \
 			$(BUILD_CFLAGS) \
 			`aarch64-none-elf-pkg-config --cflags opus` \
