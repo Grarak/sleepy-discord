@@ -31,6 +31,7 @@ namespace SleepyDiscord {
 			"}";
 		origin->send(update, origin->connection);
 
+		UDP.unsetReceiveHandler();
 		if (state & State::CONNECTED)
 			origin->disconnect(1000, "", connection);
 		if (heart.isValid())
@@ -125,36 +126,35 @@ namespace SleepyDiscord {
 			packet[2] = (sSRC >>  8) & 0xff;
 			packet[3] = (sSRC      ) & 0xff;
 			UDP.send(packet, 70);
-			UDP.receive([&](const std::vector<uint8_t>& iPDiscovery) {
-				// Taken from JDA
-				// 4 leading bytes are nulls
-				// last 2 bytes are the port in little edian
-				size_t length = iPDiscovery.size();
-				std::string receiveHost = std::string(reinterpret_cast<const char *>(&iPDiscovery[4]));
-				uint16_t receivePort = (iPDiscovery[length - 2] & 0xff)
-					| ((iPDiscovery[length - 1] & 0xff) << 8);
-				//send Select Protocol Payload
-				std::string protocol;
-				/*The number 101 comes from the number of letters in this string + 1:
-					{"op": 1,"d": {"protocol": "udp","data": {
-					"address": "","port": 65535,
-					"mode": "xsalsa20_poly1305"}}}
-				*/
-				protocol.reserve(101 + receiveHost.length());
-				protocol +=
-					"{"
-						"\"op\": 1," //VoiceOPCode::SELECT_PROTOCOL
-						"\"d\": {"
-							"\"protocol\": \"udp\","
-							"\"data\": {"
-								"\"address\": \""; protocol += receiveHost                ; protocol += "\","
-								"\"port\": "     ; protocol += std::to_string(receivePort); protocol +=   ","
-								"\"mode\": \"xsalsa20_poly1305\""
-							"}"
+			std::vector<uint8_t> iPDiscovery = UDP.waitForReceive();
+			// Taken from JDA
+			// 4 leading bytes are nulls
+			// last 2 bytes are the port in little edian
+			size_t length = iPDiscovery.size();
+			std::string receiveHost = std::string(reinterpret_cast<const char *>(&iPDiscovery[4]));
+			uint16_t receivePort = (iPDiscovery[length - 2] & 0xff)
+				| ((iPDiscovery[length - 1] & 0xff) << 8);
+			//send Select Protocol Payload
+			std::string protocol;
+			/*The number 101 comes from the number of letters in this string + 1:
+				{"op": 1,"d": {"protocol": "udp","data": {
+				"address": "","port": 65535,
+				"mode": "xsalsa20_poly1305"}}}
+			*/
+			protocol.reserve(101 + receiveHost.length());
+			protocol +=
+				"{"
+					"\"op\": 1," //VoiceOPCode::SELECT_PROTOCOL
+					"\"d\": {"
+						"\"protocol\": \"udp\","
+						"\"data\": {"
+							"\"address\": \""; protocol += receiveHost                ; protocol += "\","
+							"\"port\": "     ; protocol += std::to_string(receivePort); protocol +=   ","
+							"\"mode\": \"xsalsa20_poly1305\""
 						"}"
-					"}";
-				origin->send(protocol, connection);
-			});
+					"}"
+				"}";
+			origin->send(protocol, connection);
 			}
 			state = static_cast<State>(state | State::OPEN);
 			break;
@@ -165,6 +165,9 @@ namespace SleepyDiscord {
 			for (std::size_t i = 0; i < SECRET_KEY_SIZE && i < secretKeyJSONArraySize; ++i) {
 					secretKey[i] = secretKeyJSONArray[i].GetUint() & 0xFF;
 			}
+			// Set speaking to true first, to bypass check
+			wasPreviouslySpeaking = true;
+			sendSpeaking(false);
 			}
 			state = static_cast<State>(state | State::AUDIO_ENABLED);
 			if (context.eventHandler != nullptr)
@@ -253,24 +256,43 @@ namespace SleepyDiscord {
 #endif
 
 		//say something
-		sendSpeaking(true);
-		state = static_cast<State>(state | State::SENDING_AUDIO);
 		speechTimer.nextTime = origin->getEpochTimeMillisecond();
 		speak();
 	}
 
 	void VoiceConnection::sendSpeaking(bool isNowSpeaking) {
+		if (isNowSpeaking) {
+			state = static_cast<State>(state | State::SENDING_AUDIO);
+		} else {
+			state = static_cast<State>(state ^ State::SENDING_AUDIO);
+		}
+
+		if (lastTimeSentSpeakingState == 0) {
+			lastTimeSentSpeakingState = origin->getEpochTimeMillisecond();
+		} else {
+			time_t currentTime = origin->getEpochTimeMillisecond();
+			if (currentTime - lastTimeSentSpeakingState < 1000) {
+				return; // Send speaking state in 1 sec interval to reduce traffic
+			}
+			lastTimeSentSpeakingState = currentTime;
+		}
+
+		if (wasPreviouslySpeaking == isNowSpeaking) {
+			return;
+		}
+		wasPreviouslySpeaking = isNowSpeaking;
+
 		std::string ssrc = std::to_string(sSRC);
-		/*The number 49 comes from 1 plus the length of this string
-			{"op":5,"d":{"speaking":false,"delay":0,"ssrc":}}
+		/*The number 44 comes from 1 plus the length of this string
+			{"op":5,"d":{"speaking":0,"delay":0,"ssrc":}}
 		*/
 		std::string speaking;
-		speaking.reserve(49 + ssrc.length());
+		speaking.reserve(44 + ssrc.length());
 		speaking +=
 			"{"
 				"\"op\":5,"
 				"\"d\":{"
-					"\"speaking\":"; speaking += json::boolean(isNowSpeaking); speaking += ","
+					"\"speaking\":"; speaking += isNowSpeaking ? "1" : "0"; speaking += ","
 					"\"delay\":0,"
 					"\"ssrc\":"; speaking += ssrc; speaking +=
 				"}"
@@ -283,24 +305,32 @@ namespace SleepyDiscord {
 		if ((state & State::ABLE) != State::ABLE)
 			return;
 
-		AudioTransmissionDetails details(context, samplesSentLastTime);
+		AudioTransmissionDetails details(context, 0, samplesSentLastTime);
 
 		std::size_t length = 0;
 
 		//send the audio data
-		if (audioSource->type == AUDIO_CONTAINER) {
-			auto audioVectorSource = &static_cast<BasicAudioSourceForContainers&>(*audioSource);
-			audioVectorSource->speak(*this, details, length);
+		if (silenceCounter < 10) {
+			++silenceCounter;
+			std::array<AudioSample, AudioTransmissionDetails::proposedLength()> silenceBytes{};
+			AudioSample* ptr = silenceBytes.data();
+			speak(ptr, silenceBytes.size(), false);
 		} else {
-			AudioSample* audioBuffer = nullptr;
-			audioSource->read(details, audioBuffer, length);
-			speak(audioBuffer, length);
-		}
-
-		if ((state & SENDING_AUDIO) == 0) {
-			sendSpeaking(false);
-			context.eventHandler->onEndSpeaking(*this);
-			return;
+			bool available = audioSource->frameAvailable();
+			if (available) {
+				sendSpeaking(true);
+				if (audioSource->type == AUDIO_CONTAINER) {
+					auto audioVectorSource = &static_cast<BasicAudioSourceForContainers&>(*audioSource);
+					audioVectorSource->speak(*this, details, length);
+				} else {
+					AudioSample* audioBuffer = nullptr;
+					bool opus = audioSource->isOpusEncoded();
+					audioSource->read(details, audioBuffer, length);
+					speak(audioBuffer, length, opus);
+				}
+			} else {
+				sendSpeaking(false);
+			}
 		}
 
 		//schedule next send
@@ -313,25 +343,24 @@ namespace SleepyDiscord {
 		scheduleNextTime(speechTimer,
 			[this]() {
 				this->speak();
-			}, interval
+			}, std::max(static_cast<size_t>(interval),
+				AudioTransmissionDetails::proposedLengthOfTime())
 		);
 	}
 
-	void VoiceConnection::speak(AudioSample*& audioData, const std::size_t & length)  {
+	void VoiceConnection::speak(AudioSample*& audioData, const std::size_t & length, bool isOpus)  {
 		samplesSentLastTime = 0;
 		//This is only called in speak() so already checked that we can still send audio data
 
 		//stop sending data when there's no data
 		if (length == 0) {
-			return stopSpeaking();
-		} else if ((state & SENDING_AUDIO) == 0) {
 			return;
 		}
 
 		//the >>1 cuts it in half since you are using 2 channels
 		const std::size_t frameSize = length >> 1;
 
-		if (!audioSource->isOpusEncoded()) {
+		if (!isOpus) {
 #if defined(NONEXISTENT_OPUS)
 			return;
 #else
@@ -359,9 +388,8 @@ namespace SleepyDiscord {
 	) {
 #ifndef NONEXISTENT_SODIUM
 		++sequence;
-		constexpr int headerSize = 12;
 
-		const uint8_t header[headerSize] = {
+		const uint8_t header[rtpHeaderLength] = {
 			0x80,
 			0x78,
 			static_cast<uint8_t>((sequence  >> (8 * 1)) & 0xff),
@@ -377,14 +405,14 @@ namespace SleepyDiscord {
 		};
 
 		uint8_t nonce[nonceSize];
-		std::memcpy(nonce                , header, sizeof header);
-		std::memset(nonce + sizeof header,      0, sizeof nonce - sizeof header);
+		std::memcpy(nonce                  , header, sizeof header);
+		std::memset(nonce + rtpHeaderLength,      0, sizeof nonce - rtpHeaderLength);
 
-		const size_t numOfBtyes = sizeof header + length + crypto_secretbox_MACBYTES;
+		const size_t numOfBtyes = rtpHeaderLength + length + crypto_secretbox_MACBYTES;
 		std::vector<uint8_t> audioDataPacket(numOfBtyes);
-		std::memcpy(audioDataPacket.data(), header, sizeof header);
+		std::memcpy(audioDataPacket.data(), header, rtpHeaderLength);
 
-		crypto_secretbox_easy(audioDataPacket.data() + sizeof header,
+		crypto_secretbox_easy(audioDataPacket.data() + rtpHeaderLength,
 			encodedAudioData, length, nonce, secretKey);
 
 		UDP.send(audioDataPacket.data(), audioDataPacket.size());
@@ -401,19 +429,8 @@ namespace SleepyDiscord {
 			decoder = std::make_unique<CustomOpusDecoder>();
 		}
 		listenTimer.nextTime = origin->getEpochTimeMillisecond();
-		listen();
-	}
-
-	void VoiceConnection::listen() {
-		UDP.receive([this](const std::vector<uint8_t>& data){
-			processIncomingAudio(data);
-		});
-
-		scheduleNextTime(listenTimer,
-			[this]() {
-				this->listen();
-			},  AudioTransmissionDetails::proposedLengthOfTime()
-		);
+		UDP.setReceiveHandler(std::bind(&VoiceConnection::processIncomingAudio,
+			this, std::placeholders::_1));
 	}
 
 	int VoiceConnection::getPayloadOffset(const uint8_t* data, int csrcLength) const {
@@ -447,6 +464,7 @@ namespace SleepyDiscord {
 	void VoiceConnection::processIncomingAudio(const std::vector<uint8_t>& data)
 	{
 #if !defined(NONEXISTENT_SODIUM) || !defined(NONEXISTENT_OPUS)
+		uint32_t ssrc = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
 		size_t offset = getRTPOffset(data.data());
 
 		//get nonce
@@ -465,17 +483,21 @@ namespace SleepyDiscord {
 		if (isForged)
 			return;
 		std::memcpy(decryptedData, data.data(), rtpHeaderLength); // Prepend RTP Header to decrypted data
-		size_t decrypted_offset = getRTPOffset(decryptedData);
-		//decode
-		BaseAudioOutput::Container decodedAudioData;
+		size_t decryptedOffset = getRTPOffset(decryptedData);
 
-		int ret = decoder->decodeOpus(decryptedData + decrypted_offset, decryptedDataSize - decrypted_offset,
-			decodedAudioData.data());
-		if (ret != 0 || !hasAudioOutput())
+		uint8_t silenceBytes[] = {0xF8, 0xFF, 0xFE};
+		if (std::memcmp(decryptedData + decryptedOffset, silenceBytes, 3) == 0)
 			return;
 
-		AudioTransmissionDetails details(context, 0);
-		audioOutput->write(decodedAudioData, details);
+		//decode
+		AudioSample buf[AudioTransmissionDetails::proposedLength()] = { 0 };
+		int read = decoder->decodeOpus(decryptedData + decryptedOffset, decryptedDataSize - decryptedOffset,
+			buf);
+		if (read <= 0 || !hasAudioOutput())
+			return;
+		AudioTransmissionDetails details(context, ssrc, 0);
+		std::vector<AudioSample> decodedAudio(buf, buf + read * 2); // 2 channels
+		audioOutput->write(decodedAudio, details);
 #endif
 	}
 }

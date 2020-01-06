@@ -19,8 +19,14 @@ namespace SleepyDiscord {
 		) override {
 			return client->send(buffer, bufferLength, handler);
 		}
-		inline void receive(ReceiveHandler handler) override {
-			return client->receive(handler);
+		inline void setReceiveHandler(ReceiveHandler handler) override {
+			return client->setReceiveHandler(std::move(handler));
+		}
+		inline void unsetReceiveHandler() override {
+			return client->unsetReceiveHandler();
+		}
+		inline std::vector<uint8_t> waitForReceive() override {
+			return client->waitForReceive();
 		}
 	private:
 		std::unique_ptr<GenericUDPClient> client;

@@ -90,6 +90,10 @@ namespace SleepyDiscord {
 			return _context;
 		}
 
+		inline uint32_t ssrc() const {
+			return _ssrc;
+		}
+
 		inline std::size_t amountSentSinceLastTime() {
 			return _amountSentSinceLastTime;
 		}
@@ -118,13 +122,16 @@ namespace SleepyDiscord {
 		friend VoiceConnection;
 		AudioTransmissionDetails(
 			VoiceContext& con,
+			uint32_t ssrc,
 			const std::size_t amo
 		) :
 			_context(con),
+			_ssrc(ssrc),
 			_amountSentSinceLastTime(amo)
 		{ }
 
 		VoiceContext& _context;
+		uint32_t _ssrc;
 		const std::size_t _amountSentSinceLastTime;
 	};
 
@@ -136,13 +143,15 @@ namespace SleepyDiscord {
 		virtual ~BaseAudioSource() {}
 		//This function below is here in case the user uses this class
 		virtual void read(AudioTransmissionDetails& /*details*/, int16_t*& /*buffer*/, std::size_t& /*length*/) {};
+		virtual bool frameAvailable() {
+			return false;
+		}
 	};
 
 	struct BaseAudioOutput {
-		using Container = std::array<AudioSample, AudioTransmissionDetails::proposedLength()>;
 		BaseAudioOutput() {}
 		virtual ~BaseAudioOutput() {}
-		virtual void write(Container audio, AudioTransmissionDetails& details) {}
+		virtual void write(std::vector<AudioSample>& audio, AudioTransmissionDetails& details) {}
 		private:
 		friend VoiceConnection;
 	};
@@ -227,7 +236,7 @@ namespace SleepyDiscord {
 			return context;
 		}
 
-		void speak(AudioSample*& audioData, const std::size_t& length);
+		void speak(AudioSample*& audioData, const std::size_t& length, bool isOpus);
 
 		void disconnect();
 
@@ -296,6 +305,10 @@ namespace SleepyDiscord {
 		static constexpr int rtpHeaderLength = 12;
 		static constexpr uint16_t discordRTPExtension = 0xBEDE;
 
+		size_t silenceCounter = 0;
+		bool wasPreviouslySpeaking = false;
+		time_t lastTimeSentSpeakingState = 0;
+
 		//to do use this for events
 		template<class... Types>
 		inline void callEvent(void (BaseVoiceEventHandler::*member)(Types...), Types&&... arguments){
@@ -315,7 +328,6 @@ namespace SleepyDiscord {
 			const std::size_t & length,
 			const std::size_t & frameSize
 		);
-		void listen();
 		void processIncomingAudio(const std::vector<uint8_t>& data);
 
 		int getPayloadOffset(const uint8_t* data, int csrcLength) const;
@@ -348,7 +360,7 @@ namespace SleepyDiscord {
 			read(details, containedAudioData);
 			int16_t* audioBuffer = containedAudioData.data();
 			length = containedAudioData.size();
-			connection.speak(audioBuffer, length);
+			connection.speak(audioBuffer, length, isOpusEncoded());
 		}
 	protected:
 		Container containedAudioData;

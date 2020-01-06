@@ -32,18 +32,20 @@ INCLUDES	:=	../include/sleepy_discord ../include/sleepy_discord/IncludeNonexiste
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
-ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
+ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec
 
-CFLAGS	:=	-g -Wall -O2 -ffunction-sections \
+CFLAGS	:=	-g -Wall \
+			-ffunction-sections \
+			-fdata-sections \
+			$(ARCH) \
+			$(BUILD_CFLAGS)
+
+CFLAGS	+=	$(INCLUDE) -D__SWITCH__ \
+			`aarch64-none-elf-pkg-config --cflags opus` \
+			`aarch64-none-elf-pkg-config --cflags libsodium` \
 			-DSLEEPY_ONE_THREAD -DSLEEPY_CUSTOM_SESSION -DSLEEPY_VOICE_ENABLED \
 			-DSLEEPY_CUSTOM_UDP_CLIENT -DEXISTENT_OPUS -DEXISTENT_SODIUM \
-			-DSLEEPY_USE_HARD_CODED_GATEWAY \
-			$(ARCH) $(DEFINES) \
-			$(BUILD_CFLAGS) \
-			`aarch64-none-elf-pkg-config --cflags opus` \
-			`aarch64-none-elf-pkg-config --cflags libsodium`
-
-CFLAGS	+=	$(INCLUDE) -D__SWITCH__
+			-DSLEEPY_USE_HARD_CODED_GATEWAY
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
 
@@ -87,29 +89,19 @@ else
 endif
 #---------------------------------------------------------------------------------
 
-export OFILES	:=	$(addsuffix .o,$(BINFILES)) \
-			$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+export OFILES_BIN	:=	$(addsuffix .o,$(BINFILES))
+export OFILES_SRC	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+export OFILES 	:=	$(OFILES_BIN) $(OFILES_SRC)
+export HFILES	:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
 
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-			-I.
+			-I$(CURDIR)/$(BUILD)
 
 .PHONY: clean all
 
 #---------------------------------------------------------------------------------
-all: lib/libsleepy_discord.a
-
-dist-bin: all
-	@tar --exclude=*~ -cjf sleepy_discord-$(VERSION).tar.bz2 include lib default_icon.png
-
-dist-src:
-	@tar --exclude=*~ -cjf sleepy_discord-src-$(VERSION).tar.bz2 include source data Makefile Doxyfile default_icon.png
-
-dist: dist-src dist-bin
-
-install: dist-bin
-	mkdir -p $(DEVKITPRO)/sleepy_discord
-	bzip2 -cd sleepy_discord-$(VERSION).tar.bz2 | tar -xf - -C $(DEVKITPRO)/sleepy_discord
+all: lib/lib$(TARGET).a lib/lib$(TARGET)d.a
 
 lib:
 	@[ -d $@ ] || mkdir -p $@
@@ -120,24 +112,32 @@ release:
 debug:
 	@[ -d $@ ] || mkdir -p $@
 
-lib/libsleepy_discord.a : lib release $(SOURCES) $(INCLUDES)
+lib/lib$(TARGET).a : lib release $(SOURCES) $(INCLUDES)
 	@$(MAKE) BUILD=release OUTPUT=$(CURDIR)/$@ \
-	BUILD_CFLAGS="-DNDEBUG=1 -O2 -fomit-frame-pointer" \
+	BUILD_CFLAGS="-DNDEBUG=1 -O2" \
 	DEPSDIR=$(CURDIR)/release \
 	--no-print-directory -C release \
 	-f $(CURDIR)/Makefile.switch
 
-lib/libsleepy_discordd.a : lib debug $(SOURCES) $(INCLUDES)
+lib/lib$(TARGET)d.a : lib debug $(SOURCES) $(INCLUDES)
 	@$(MAKE) BUILD=debug OUTPUT=$(CURDIR)/$@ \
 	BUILD_CFLAGS="-DDEBUG=1 -Og" \
 	DEPSDIR=$(CURDIR)/debug \
 	--no-print-directory -C debug \
 	-f $(CURDIR)/Makefile.switch
 
+dist-bin: all
+	@tar --exclude=*~ -cjf lib$(TARGET).tar.bz2 include lib
+
+dist-src:
+	@tar --exclude=*~ -cjf lib$(TARGET)-src.tar.bz2 include source Makefile
+
+dist: dist-src dist-bin
+
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr release debug lib docs
+	@rm -fr release debug lib *.bz2
 
 #---------------------------------------------------------------------------------
 else
@@ -149,8 +149,10 @@ DEPENDS	:=	$(OFILES:.o=.d)
 #---------------------------------------------------------------------------------
 $(OUTPUT)	:	$(OFILES)
 
+$(OFILES_SRC)	: $(HFILES)
+
 #---------------------------------------------------------------------------------
-%.bin.o	:	%.bin
+%_bin.h %.bin.o	:	%.bin
 #---------------------------------------------------------------------------------
 	@echo $(notdir $<)
 	@$(bin2o)

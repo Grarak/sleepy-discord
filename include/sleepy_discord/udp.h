@@ -18,10 +18,18 @@ namespace SleepyDiscord {
 			size_t bufferLength,
 			SendHandler handler = [](){}
 		) = 0;
-		virtual void receive(ReceiveHandler handler) = 0;
-
-		inline void send(const std::vector<uint8_t> buffer, SendHandler handler = [](){}) {
-			send(&buffer[0], buffer.size(), handler);
+		inline virtual void setReceiveHandler(ReceiveHandler handler) {
+			receive_handler = std::move(handler);
 		}
+		inline virtual void unsetReceiveHandler() {
+			receive_handler = ReceiveHandler();
+		}
+		virtual std::vector<uint8_t> waitForReceive() = 0;
+
+		inline void send(const std::vector<uint8_t>& buffer, SendHandler handler = [](){}) {
+			send(buffer.data(), buffer.size(), handler);
+		}
+	protected:
+		ReceiveHandler receive_handler;
 	};
 }
