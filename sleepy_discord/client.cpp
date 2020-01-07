@@ -273,10 +273,10 @@ namespace SleepyDiscord {
 #elif defined(unix) || defined(__unix__) || defined(__unix)
 		const char * os = "Unix";
 #else
-		const char* os = "\\u00AF\\\\_(\\u30C4)_\\/\\u00AF";  //shrug I dunno
+		const char* os = "Other";  //shrug I dunno
 #endif
 		std::string identity;
-		identity.reserve(272); //remember to change this number when editing identity
+		identity.reserve(280); //remember to change this number when editing identity
 		identity +=
 		"{"
 			"\"op\":2,"
@@ -289,6 +289,7 @@ namespace SleepyDiscord {
 					"\"$referrer\":\"\","
 					"\"$referring_domain\":\"\""
 				"},"
+				"\"v\": 6,"
 				"\"compress\":false,";
 		if (shardCount != 0 && shardID <= shardCount) {
 			identity +=
