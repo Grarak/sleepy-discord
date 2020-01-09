@@ -523,6 +523,10 @@ namespace SleepyDiscord {
 		void quit(bool isRestarting, bool isDisconnected = false);
 		void restart();
 
+#ifdef SLEEPY_VOICE_ENABLED
+		void removeVoiceConnectionAndContext(VoiceConnection& connection);
+#endif
+
 	private:
 		using GenericMessageReceiver::initialize;
 
@@ -588,7 +592,6 @@ namespace SleepyDiscord {
 		std::forward_list<VoiceContext*> waitingVoiceContexts;
 #ifdef SLEEPY_VOICE_ENABLED
 		void connectToVoiceIfReady(VoiceContext& context);
-		void removeVoiceConnectionAndContext(VoiceConnection& connection);
 #endif
 
 		template<class Callback>

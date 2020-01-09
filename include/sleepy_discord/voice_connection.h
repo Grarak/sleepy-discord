@@ -35,11 +35,11 @@ namespace SleepyDiscord {
 		friend VoiceConnection;
 		friend BaseDiscordClient;
 	public:
-		inline Snowflake<Channel> getChannelID() {
+		inline Snowflake<Channel> getChannelID() const {
 			return channelID;
 		}
 
-		inline Snowflake<Server> getServerID() {
+		inline Snowflake<Server> getServerID() const {
 			return serverID;
 		}
 
@@ -51,7 +51,7 @@ namespace SleepyDiscord {
 			eventHandler = std::unique_ptr<BaseVoiceEventHandler>(source);
 		}
 
-		inline const bool hasVoiceHandler() {
+		inline const bool hasVoiceHandler() const {
 			return eventHandler != nullptr;
 		}
 
@@ -64,6 +64,10 @@ namespace SleepyDiscord {
 			setVoiceHandler(new EventHandler(std::forward<Types>(arguments)...));
 		}
 
+		std::string sessionID = "";
+		std::string endpoint = "";
+		std::string token;
+
 	private:
 		VoiceContext(Snowflake<Server> _serverID, Snowflake<Channel> _channelID, BaseVoiceEventHandler* _eventHandler) :
 			serverID(_serverID), channelID(_channelID), eventHandler(_eventHandler)
@@ -71,9 +75,6 @@ namespace SleepyDiscord {
 
 		Snowflake<Server> serverID;
 		Snowflake<Channel> channelID;
-		std::string sessionID = "";
-		std::string endpoint = "";
-		std::string token;
 		std::unique_ptr<BaseVoiceEventHandler> eventHandler;
 	};
 

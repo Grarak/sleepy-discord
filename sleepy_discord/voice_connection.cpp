@@ -118,6 +118,37 @@ namespace SleepyDiscord {
 			//start heartbeating
 			heartbeat();
 			//connect to UDP
+			UDP.setReceiveHandler([this](const std::vector<uint8_t>& iPDiscovery) {
+				UDP.unsetReceiveHandler();
+				// Taken from JDA
+				// 4 leading bytes are nulls
+				// last 2 bytes are the port in little edian
+				size_t length = iPDiscovery.size();
+				std::string receiveHost = std::string(reinterpret_cast<const char *>(&iPDiscovery[4]));
+				uint16_t receivePort = (iPDiscovery[length - 2] & 0xff)
+					| ((iPDiscovery[length - 1] & 0xff) << 8);
+				//send Select Protocol Payload
+				std::string protocol;
+				/*The number 101 comes from the number of letters in this string + 1:
+					{"op": 1,"d": {"protocol": "udp","data": {
+					"address": "","port": 65535,
+					"mode": "xsalsa20_poly1305"}}}
+				*/
+				protocol.reserve(101 + receiveHost.length());
+				protocol +=
+					"{"
+						"\"op\": 1," //VoiceOPCode::SELECT_PROTOCOL
+						"\"d\": {"
+							"\"protocol\": \"udp\","
+							"\"data\": {"
+								"\"address\": \""; protocol += receiveHost                ; protocol += "\","
+								"\"port\": "     ; protocol += std::to_string(receivePort); protocol +=   ","
+								"\"mode\": \"xsalsa20_poly1305\""
+							"}"
+						"}"
+					"}";
+				origin->send(protocol, connection);
+			});
 			UDP.connect(ip, port);
 			//IP Discovery
 			unsigned char packet[70] = { 0 };
@@ -126,35 +157,6 @@ namespace SleepyDiscord {
 			packet[2] = (sSRC >>  8) & 0xff;
 			packet[3] = (sSRC      ) & 0xff;
 			UDP.send(packet, 70);
-			std::vector<uint8_t> iPDiscovery = UDP.waitForReceive();
-			// Taken from JDA
-			// 4 leading bytes are nulls
-			// last 2 bytes are the port in little edian
-			size_t length = iPDiscovery.size();
-			std::string receiveHost = std::string(reinterpret_cast<const char *>(&iPDiscovery[4]));
-			uint16_t receivePort = (iPDiscovery[length - 2] & 0xff)
-				| ((iPDiscovery[length - 1] & 0xff) << 8);
-			//send Select Protocol Payload
-			std::string protocol;
-			/*The number 101 comes from the number of letters in this string + 1:
-				{"op": 1,"d": {"protocol": "udp","data": {
-				"address": "","port": 65535,
-				"mode": "xsalsa20_poly1305"}}}
-			*/
-			protocol.reserve(101 + receiveHost.length());
-			protocol +=
-				"{"
-					"\"op\": 1," //VoiceOPCode::SELECT_PROTOCOL
-					"\"d\": {"
-						"\"protocol\": \"udp\","
-						"\"data\": {"
-							"\"address\": \""; protocol += receiveHost                ; protocol += "\","
-							"\"port\": "     ; protocol += std::to_string(receivePort); protocol +=   ","
-							"\"mode\": \"xsalsa20_poly1305\""
-						"}"
-					"}"
-				"}";
-			origin->send(protocol, connection);
 			}
 			state = static_cast<State>(state | State::OPEN);
 			break;

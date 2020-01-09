@@ -333,6 +333,8 @@ namespace SleepyDiscord {
 		for (VoiceConnection& voiceConnection : voiceConnections)
 			voiceConnection.disconnect();
 		voiceConnections.clear();
+		waitingVoiceContexts.clear();
+		voiceContexts.clear();
 #endif
 		if (heart.isValid()) heart.stop(); //stop heartbeating
 		if (!isDisconnected) disconnectWebsocket(1000);
@@ -741,6 +743,7 @@ namespace SleepyDiscord {
 	}
 
 	void BaseDiscordClient::removeVoiceConnectionAndContext(VoiceConnection & connection) {
+		connection.disconnect();
 		const VoiceContext& context = connection.getContext();
 		voiceConnections.remove_if(
 			[&connection](VoiceConnection& right) {
