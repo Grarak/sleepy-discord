@@ -25,9 +25,6 @@ namespace SleepyDiscord {
 		inline void unsetReceiveHandler() override {
 			return client->unsetReceiveHandler();
 		}
-		inline std::vector<uint8_t> waitForReceive() override {
-			return client->waitForReceive();
-		}
 	private:
 		std::unique_ptr<GenericUDPClient> client;
 	};
