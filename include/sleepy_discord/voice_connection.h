@@ -2,6 +2,7 @@
 #include <vector>
 #include <array>
 #include <cstdint>
+#include <mutex>
 #include <list>
 #if (!defined(NONEXISTENT_OPUS) && !defined(SLEEPY_DISCORD_CMAKE)) || defined(EXISTENT_OPUS)
 #include <opus.h>
@@ -196,14 +197,17 @@ namespace SleepyDiscord {
 		/*To do there might be a way to prevent code reuse here*/
 
 		inline void setAudioOutput(BaseAudioOutput*& output) {
+			std::lock_guard<std::mutex> lock(audioOutputLock);
 			audioOutput = std::unique_ptr<BaseAudioOutput>(output);
 		}
 
 		inline const bool hasAudioOutput() {
+			std::lock_guard<std::mutex> lock(audioOutputLock);
 			return audioOutput != nullptr;
 		}
 
 		inline BaseAudioOutput& getAudioOutput() {
+			std::lock_guard<std::mutex> lock(audioOutputLock);
 			return *(audioOutput.get());
 		}
 
@@ -291,6 +295,7 @@ namespace SleepyDiscord {
 		int16_t numOfPacketsSent = 0;
 		std::unique_ptr<BaseAudioSource> audioSource;
 		std::unique_ptr<BaseAudioOutput> audioOutput;
+		std::mutex audioOutputLock;
 		AudioTimer speechTimer;
 		AudioTimer listenTimer;
 		std::size_t samplesSentLastTime = 0;

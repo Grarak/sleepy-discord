@@ -14,6 +14,7 @@ namespace SleepyDiscord {
 
 	void VoiceConnection::disconnect() {
 		stopSpeaking();
+		UDP.unsetReceiveHandler();
 		std::string update;
 		/*The number 103 comes from the number of letters in this string + 1:
 		{"op":4,"d":{"guild_id":"18446744073709551615","channel_id":null,"self_mute":false,"self_deaf":false}}
@@ -31,7 +32,6 @@ namespace SleepyDiscord {
 			"}";
 		origin->send(update, origin->connection);
 
-		UDP.unsetReceiveHandler();
 		if (state & State::CONNECTED)
 			origin->disconnect(1000, "", connection);
 		if (heart.isValid())
@@ -495,11 +495,17 @@ namespace SleepyDiscord {
 		AudioSample buf[AudioTransmissionDetails::proposedLength()] = { 0 };
 		int read = decoder->decodeOpus(decryptedData + decryptedOffset, decryptedDataSize - decryptedOffset,
 			buf);
-		if (read <= 0 || !hasAudioOutput())
+		if (read <= 0)
 			return;
-		AudioTransmissionDetails details(context, ssrc, 0);
-		std::vector<AudioSample> decodedAudio(buf, buf + read * 2); // 2 channels
-		audioOutput->write(decodedAudio, details);
+		{
+			std::lock_guard<std::mutex> lock(audioOutputLock);
+			if (!audioOutput) {
+				return;
+			}
+			AudioTransmissionDetails details(context, ssrc, 0);
+			std::vector<AudioSample> decodedAudio(buf, buf + read * 2); // 2 channels
+			audioOutput->write(decodedAudio, details);
+		}
 #endif
 	}
 }
