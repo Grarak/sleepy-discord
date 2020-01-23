@@ -124,19 +124,21 @@ namespace SleepyDiscord {
 					setError(code);		//https error
 					//json::Values values = json::getValues(response.text.c_str(),
 					//{ "code", "message" });	//parse json to get code and message
-					rapidjson::Document document;
-					document.Parse(response.text.c_str());
-					auto errorCode = document.FindMember("code");
-					auto errorMessage = document.FindMember("message");
-					if (errorCode != document.MemberEnd())
-						onError(
-							static_cast<ErrorCode>(errorCode->value.GetInt()),
-							{ errorMessage != document.MemberEnd() ? errorMessage->value.GetString() : "" }
-					);
-					else if (!response.text.empty())
-						onError(ERROR_NOTE, response.text);
+          if(!response.text.empty()) {
+            rapidjson::Document document;
+            document.Parse(response.text.c_str());
+            auto errorCode = document.FindMember("code");
+            auto errorMessage = document.FindMember("message");
+            if (errorCode != document.MemberEnd())
+              onError(
+                static_cast<ErrorCode>(errorCode->value.GetInt()),
+                { errorMessage != document.MemberEnd() ? errorMessage->value.GetString() : "" }
+            );
+            else
+              onError(ERROR_NOTE, response.text);
+          }
 #if defined(__cpp_exceptions) || defined(__EXCEPTIONS)
-					throw code;
+          throw code;
 #endif
 				} break;
 			}
@@ -229,6 +231,8 @@ namespace SleepyDiscord {
 			quit(false, true);
 			return setError(GATEWAY_FAILED);
 		}
+    if (!theGateway.empty())
+			theGateway.clear();
 		//getting the gateway
 		for (unsigned int position = 0, j = 0; ; ++position) {
 			if (a.text[position] == '"')
