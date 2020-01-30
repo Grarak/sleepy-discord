@@ -7,7 +7,7 @@ namespace SleepyDiscord {
 	VoiceConnection::VoiceConnection(BaseDiscordClient* client, VoiceContext& _context) :
 		origin(client), context(_context), sSRC(0), port(0), nextTime(0),
 #if !defined(NONEXISTENT_OPUS)
-		encoder(nullptr), decoder(nullptr),
+		encoder(nullptr),
 #endif
 		secretKey()
 	{}
@@ -44,9 +44,7 @@ namespace SleepyDiscord {
 			opus_encoder_destroy(encoder);
 			encoder = nullptr;
 		}
-		if (decoder) {
-			decoder.reset();
-		}
+		decoders.clear();
 		state = static_cast<State>(state & ~State::CONNECTED);
 	}
 
@@ -175,9 +173,15 @@ namespace SleepyDiscord {
 			if (context.eventHandler != nullptr)
 				context.eventHandler->onReady(*this);
 			break;
-		case SPEAKING:
+		case SPEAKING: {
+			uint32_t ssrc = d["ssrc"].GetUint();
+            Snowflake<User> user_id = d["user_id"];
+
+			userSSRCs[user_id.number()] = ssrc;
+			}
 			if (context.eventHandler != nullptr)
 				context.eventHandler->onSpeaking(*this);
+			break;
 		case RESUMED:
 			break;
 		case HEARTBEAT:
@@ -188,6 +192,16 @@ namespace SleepyDiscord {
 			if (context.eventHandler != nullptr)
 				context.eventHandler->onHeartbeatAck(*this,
 					origin->getEpochTimeMillisecond() - previous_time);
+			}
+			break;
+		case CLIENT_DISCONNECT: {
+			Snowflake<User> user_id = d["user_id"];
+			auto it = userSSRCs.find(user_id.number());
+			if (it != userSSRCs.end()) {
+				std::lock_guard<std::mutex> lock(decodersLock);
+				decoders.erase(it->second);
+				userSSRCs.erase(it);
+			}
 			}
 			break;
 		default:
@@ -427,9 +441,6 @@ namespace SleepyDiscord {
 
 	//To do test this
 	void VoiceConnection::startListening() {
-		if (!(state & CAN_DECODE) && !decoder) {
-			decoder = std::make_unique<CustomOpusDecoder>();
-		}
 		listenTimer.nextTime = origin->getEpochTimeMillisecond();
 		UDP.setReceiveHandler(std::bind(&VoiceConnection::processIncomingAudio,
 			this, std::placeholders::_1));
@@ -491,12 +502,22 @@ namespace SleepyDiscord {
 		if (std::memcmp(decryptedData + decryptedOffset, silenceBytes, 3) == 0)
 			return;
 
-		//decode
+		int read;
 		AudioSample buf[AudioTransmissionDetails::proposedLength()] = { 0 };
-		int read = decoder->decodeOpus(decryptedData + decryptedOffset, decryptedDataSize - decryptedOffset,
-			buf);
-		if (read <= 0)
-			return;
+		{
+			std::lock_guard<std::mutex> lock(decodersLock);
+			auto it = decoders.find(ssrc);
+			if (it == decoders.end()) {
+				it = decoders.insert(std::make_pair(ssrc, std::make_unique<CustomOpusDecoder>())).first;
+			}
+
+			//decode
+			read = it->second->decodeOpus(decryptedData + decryptedOffset,
+				decryptedDataSize - decryptedOffset, buf);
+
+			if (read <= 0) return;
+		}
+
 		{
 			std::lock_guard<std::mutex> lock(audioOutputLock);
 			if (!audioOutput) {

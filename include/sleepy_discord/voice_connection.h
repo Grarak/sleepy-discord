@@ -301,7 +301,9 @@ namespace SleepyDiscord {
 		std::size_t samplesSentLastTime = 0;
 		time_t nextTime = 0;
 		OpusEncoder *encoder = nullptr;
-		std::unique_ptr<CustomOpusDecoder> decoder;
+		std::map<int64_t, uint32_t> userSSRCs;
+		std::mutex decodersLock;
+		std::map<uint32_t, std::unique_ptr<CustomOpusDecoder>> decoders;
 		uint16_t sequence = 0;
 		uint32_t timestamp = 0;
 
