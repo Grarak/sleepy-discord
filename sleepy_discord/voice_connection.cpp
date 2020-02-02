@@ -113,9 +113,7 @@ namespace SleepyDiscord {
 			port = static_cast<uint16_t>(d["port"].GetUint());
 			const json::Value& ipValue = d["ip"];
 			std::string ip(ipValue.GetString(), ipValue.GetStringLength());
-			//start heartbeating
-			heartbeat();
-			//connect to UDP
+
 			UDP.setReceiveHandler([this](const std::vector<uint8_t>& iPDiscovery) {
 				UDP.unsetReceiveHandler();
 				// Taken from JDA
@@ -147,6 +145,7 @@ namespace SleepyDiscord {
 					"}";
 				origin->send(protocol, connection);
 			});
+			//connect to UDP
 			UDP.connect(ip, port);
 			//IP Discovery
 			unsigned char packet[70] = { 0 };
@@ -155,6 +154,8 @@ namespace SleepyDiscord {
 			packet[2] = (sSRC >>  8) & 0xff;
 			packet[3] = (sSRC      ) & 0xff;
 			UDP.send(packet, 70);
+			//start heartbeating
+			heartbeat();
 			}
 			state = static_cast<State>(state | State::OPEN);
 			break;
