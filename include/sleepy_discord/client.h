@@ -292,13 +292,13 @@ namespace SleepyDiscord {
 		void updateStatus(std::string gameName = "", uint64_t idleSince = 0, Status status = online, bool afk = false);
 
 		void waitTilReady();  ////Deprecated, uses sleep. No replacment for now
-		const bool isReady() { return ready; }
-		const bool isQuiting() { return quiting; }
-		const bool isBot() { return bot; }
-		const Snowflake<User> getID() { return userID; }
+		const bool isReady() const { return ready; }
+		const bool isQuiting() const { return quiting; }
+		const bool isBot() const { return bot; }
+		const Snowflake<User> getID() const { return userID; }
 		void setShardID(int _shardID, int _shardCount); //Note: must be called before run or reconnect
-		const int getShardID() { return shardID; }
-		const int getShardCount() { return shardCount; }
+		const int getShardID() const { return shardID; }
+		const int getShardCount() const { return shardCount; }
 		void quit() { quit(false); }	//public function for diconnecting
 		virtual void run();
 
