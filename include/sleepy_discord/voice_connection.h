@@ -337,6 +337,7 @@ namespace SleepyDiscord {
 			const std::size_t & frameSize
 		);
 		void processIncomingAudio(const std::vector<uint8_t>& data);
+		void ipDiscovery(const std::vector<uint8_t>& iPDiscovery);
 
 		int getPayloadOffset(const uint8_t* data, int csrcLength) const;
 		size_t getRTPOffset(const uint8_t* data) const;

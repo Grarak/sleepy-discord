@@ -66,7 +66,7 @@ namespace SleepyDiscord {
 					"\"token\":\""     ; resume += context.token    ; resume += "\""
 				"}"
 			"}";
-		origin->send(resume, origin->connection);
+		origin->send(resume, connection);
 	}
 
 	void VoiceConnection::processMessage(const std::string &message) {
@@ -113,38 +113,10 @@ namespace SleepyDiscord {
 			port = static_cast<uint16_t>(d["port"].GetUint());
 			const json::Value& ipValue = d["ip"];
 			std::string ip(ipValue.GetString(), ipValue.GetStringLength());
-
-			UDP.setReceiveHandler([this](const std::vector<uint8_t>& iPDiscovery) {
-				UDP.unsetReceiveHandler();
-				// Taken from JDA
-				// 4 leading bytes are nulls
-				// last 2 bytes are the port in little edian
-				size_t length = iPDiscovery.size();
-				std::string receiveHost = std::string(reinterpret_cast<const char *>(&iPDiscovery[4]));
-				uint16_t receivePort = (iPDiscovery[length - 2] & 0xff)
-					| ((iPDiscovery[length - 1] & 0xff) << 8);
-				//send Select Protocol Payload
-				std::string protocol;
-				/*The number 101 comes from the number of letters in this string + 1:
-					{"op": 1,"d": {"protocol": "udp","data": {
-					"address": "","port": 65535,
-					"mode": "xsalsa20_poly1305"}}}
-				*/
-				protocol.reserve(101 + receiveHost.length());
-				protocol +=
-					"{"
-						"\"op\": 1," //VoiceOPCode::SELECT_PROTOCOL
-						"\"d\": {"
-							"\"protocol\": \"udp\","
-							"\"data\": {"
-								"\"address\": \""; protocol += receiveHost                ; protocol += "\","
-								"\"port\": "     ; protocol += std::to_string(receivePort); protocol +=   ","
-								"\"mode\": \"xsalsa20_poly1305\""
-							"}"
-						"}"
-					"}";
-				origin->send(protocol, connection);
-			});
+			//start heartbeating
+			heartbeat();
+			UDP.setReceiveHandler(std::bind(&VoiceConnection::ipDiscovery, this,
+				std::placeholders::_1));
 			//connect to UDP
 			UDP.connect(ip, port);
 			//IP Discovery
@@ -154,8 +126,6 @@ namespace SleepyDiscord {
 			packet[2] = (sSRC >>  8) & 0xff;
 			packet[3] = (sSRC      ) & 0xff;
 			UDP.send(packet, 70);
-			//start heartbeating
-			heartbeat();
 			}
 			state = static_cast<State>(state | State::OPEN);
 			break;
@@ -473,6 +443,38 @@ namespace SleepyDiscord {
 			offset = getPayloadOffset(data, csrcLength);
 		}
 		return offset;
+	}
+
+	void VoiceConnection::ipDiscovery(const std::vector<uint8_t>& iPDiscovery) {
+		UDP.unsetReceiveHandler();
+		// Taken from JDA
+		// 4 leading bytes are nulls
+		// last 2 bytes are the port in little edian
+		size_t length = iPDiscovery.size();
+		std::string receiveHost = std::string(reinterpret_cast<const char *>(&iPDiscovery[4]));
+		uint16_t receivePort = (iPDiscovery[length - 2] & 0xff)
+			| ((iPDiscovery[length - 1] & 0xff) << 8);
+		//send Select Protocol Payload
+		std::string protocol;
+		/*The number 101 comes from the number of letters in this string + 1:
+			{"op": 1,"d": {"protocol": "udp","data": {
+			"address": "","port": 65535,
+			"mode": "xsalsa20_poly1305"}}}
+		*/
+		protocol.reserve(101 + receiveHost.length());
+		protocol +=
+			"{"
+				"\"op\": 1," //VoiceOPCode::SELECT_PROTOCOL
+				"\"d\": {"
+					"\"protocol\": \"udp\","
+					"\"data\": {"
+						"\"address\": \""; protocol += receiveHost                ; protocol += "\","
+						"\"port\": "     ; protocol += std::to_string(receivePort); protocol +=   ","
+						"\"mode\": \"xsalsa20_poly1305\""
+					"}"
+				"}"
+			"}";
+		origin->send(protocol, connection);
 	}
 
 	void VoiceConnection::processIncomingAudio(const std::vector<uint8_t>& data)
