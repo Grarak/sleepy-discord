@@ -139,6 +139,7 @@ namespace SleepyDiscord {
 			// Set speaking to true first, to bypass check
 			wasPreviouslySpeaking = true;
 			sendSpeaking(false);
+			lastTimeSentSpeakingState = 0;
 			}
 			state = static_cast<State>(state | State::AUDIO_ENABLED);
 			if (context.eventHandler != nullptr)
@@ -258,8 +259,8 @@ namespace SleepyDiscord {
 			lastTimeSentSpeakingState = origin->getEpochTimeMillisecond();
 		} else {
 			time_t currentTime = origin->getEpochTimeMillisecond();
-			if (currentTime - lastTimeSentSpeakingState < 1000) {
-				return; // Send speaking state in 1 sec interval to reduce traffic
+			if (currentTime - lastTimeSentSpeakingState < 500) {
+				return; // Send speaking state in 500 ms interval to reduce traffic
 			}
 			lastTimeSentSpeakingState = currentTime;
 		}
