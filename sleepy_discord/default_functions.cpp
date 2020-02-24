@@ -6,7 +6,7 @@
 #endif
 
 namespace SleepyDiscord {
-	void BaseDiscordClient::onReady(Ready readyData) {
+	void BaseDiscordClient::onReady() {
 
 	}
 

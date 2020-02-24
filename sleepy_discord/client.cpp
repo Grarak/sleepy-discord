@@ -395,6 +395,121 @@ namespace SleepyDiscord {
 		return !key[i] ? 0 : (hash(key, i + 1) * 31) + key[i] - 'A';
 	}
 
+        /**
+         * This handler is only responsible to parse the contents of READY.
+         * Usually READY is the biggest data we get from discord by far, so read
+         * only the necessary data from it as a stream.
+         */
+        struct MessageHandler : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>, MessageHandler> {
+          JsonInputStream& _stream;
+          bool _parse_ready_d = false;
+          bool _parse_user = false;
+          std::string _current_key;
+          std::string _session_id;
+          bool _bot = false;
+          Snowflake<User> _user_id;
+
+          explicit MessageHandler(SleepyDiscord::JsonInputStream& is) : _stream(is) {
+          }
+
+          bool done() const {
+            return _parse_ready_d && !_session_id.empty() && !_user_id.string().empty();
+          }
+
+          bool Null() { return true; }
+          bool Bool(bool b) {
+            if (_parse_user && _current_key == "bot") {
+              _bot = b;
+            }
+            return true;
+          }
+          bool Int(int i) { return true; }
+          bool Uint(unsigned u) {
+            if (_current_key == "op") {
+              return BaseDiscordClient::OPCode::DISPATCH == u;
+            }
+            return true;
+          }
+          bool Int64(int64_t i) {
+            return true;
+          }
+          bool Uint64(uint64_t u) {
+            return true;
+          }
+          bool Double(double d) { return true; }
+          bool String(const char* str, SizeType length, bool copy) {
+            std::string value(str, str + length);
+            if (_current_key == "t") {
+              if ( value == "READY") {
+                _stream.SetCache(false);
+                return true;
+              }
+              return false;
+            } else if (_parse_ready_d) {
+              if (_current_key == "session_id") {
+                _session_id = value;
+                return !done();
+              } else if (_parse_user) {
+                if (_current_key == "id") {
+                  _user_id = value;
+                }
+              }
+            }
+            return true;
+          }
+          bool StartObject() {
+            if (_current_key == "d") {
+              _parse_ready_d = true;
+            }
+            return true;
+          }
+          bool Key(const char* str, SizeType length, bool copy) {
+            _current_key = {str, str + length};
+            if (_parse_ready_d && _current_key == "user") {
+              _parse_user = true;
+            }
+            return true;
+          }
+          bool EndObject(SizeType memberCount) {
+            if (_parse_user) {
+              _parse_user = false;
+              return !done();
+            }
+            return true;
+          }
+          bool StartArray() { return true; }
+          bool EndArray(SizeType elementCount) { return true; }
+        };
+
+        void BaseDiscordClient::processStream(SleepyDiscord::JsonInputStream& is) {
+          is.SetCache(true);
+          MessageHandler handler(is);
+          rapidjson::Reader reader;
+          rapidjson::ParseResult result = reader.Parse(is, handler);
+          if (result == rapidjson::ParseErrorCode::kParseErrorTermination) {
+            if (handler.done()) {
+              sessionID = handler._session_id;
+              bot = handler._bot;
+              userID = handler._user_id;
+              onReady();
+              ready = true;
+              // Read rest of stream to satisfy zlib
+              while (is.Take() != '\0');
+            } else {
+              std::string message = is.GetCache();
+              is.SetCache(false);
+              char c;
+              while ((c = is.Take()) != '\0') {
+                message.push_back(c);
+              }
+              message.shrink_to_fit();
+              processMessage(message);
+            }
+          } else {
+            printf("json parsing error %u\n", result.Code());
+          }
+        }
+
 	void BaseDiscordClient::processMessage(const std::string &message) {
 		rapidjson::Document document;
 		document.Parse(message.c_str(), message.length());
@@ -414,7 +529,7 @@ namespace SleepyDiscord {
 				sessionID = readyData.sessionID;
 				bot = readyData.user.bot;
 				userID = readyData.user;
-				onReady(readyData);
+				onReady();
 				ready = true;
 				} break;
 			case hash("RESUMED"                    ): onResumed            (); break;

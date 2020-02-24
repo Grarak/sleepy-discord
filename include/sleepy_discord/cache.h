@@ -13,7 +13,6 @@ namespace SleepyDiscord {
 	public:
 		using Type = _Type;
 		using Parent = std::unordered_map<typename Snowflake<Type>::RawType, Type>;
-		using Parent::unordered_map;
 		using Key = typename Snowflake<Type>::RawType;
 		Cache() : Parent() {}
 		Cache(Parent map) : Parent(map) {}

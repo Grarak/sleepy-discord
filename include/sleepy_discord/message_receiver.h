@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include "json_inputstream.h"
 #include "websocket_connection.h"
 
 namespace SleepyDiscord {
@@ -8,6 +9,7 @@ namespace SleepyDiscord {
 		virtual ~GenericMessageReceiver() = default;
 		virtual void initialize() {}                                  //called when ready to recevie messages
 		virtual void handleFailToConnect() {}                         //called when connection has failed to start
+                virtual void processStream(JsonInputStream &is) = 0;
 		virtual void processMessage(const std::string & message) = 0; //called when recevicing a message
 		virtual void processCloseCode(const int16_t /*code*/) {}
 		WebsocketConnection connection;                               //maybe this should be set to protected?

@@ -249,6 +249,7 @@ namespace SleepyDiscord {
 		friend BaseDiscordClient;
 
 		void initialize() override;
+		void processStream(JsonInputStream &is) override {}
 		void processMessage(const std::string &message) override;
 		void processCloseCode(const int16_t code) override;
 

@@ -435,7 +435,7 @@ namespace SleepyDiscord {
 		* event that hasn't been added
 		*/
 		//TODO: use references, using them now will break other's code
-		virtual void onReady             (Ready              readyData  );
+		virtual void onReady             (                              );
 		virtual void onResumed           (                              );
 		virtual void onDeleteServer      (UnavailableServer server      );
 		virtual void onEditServer        (Server            server      );
@@ -489,6 +489,7 @@ namespace SleepyDiscord {
 
 		/*do not use or overwrite the protected values below,
 		unless you know what you are doing*/
+		void processStream(JsonInputStream &is) override;
 		void processMessage(const std::string &message) override;
 		void processCloseCode(const int16_t code) override;
 		void heartbeat();
@@ -537,6 +538,7 @@ namespace SleepyDiscord {
 		std::unique_ptr<GenericScheduleHandler> scheduleHandler = nullptr;
 		Timer heart;
 
+	 public:
 		enum OPCode {
 			DISPATCH              = 0,  //dispatches an event
 			HEARTHBEAT            = 1,  //used for ping checking
@@ -551,6 +553,7 @@ namespace SleepyDiscord {
 			HELLO                 = 10, //sent immediately after connecting, contains heartbeat and server debug information
 			HEARTBEAT_ACK         = 11, //sent immediately following a client heartbeat that was received
 		};
+	 private:
 
 		std::unique_ptr<std::string> token;		//stored in a unique_ptr so that you can't see it in the debugger
 		std::string sessionID;	//TODO: replace this with a Ready object
