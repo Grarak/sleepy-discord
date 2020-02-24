@@ -493,8 +493,6 @@ namespace SleepyDiscord {
               userID = handler._user_id;
               onReady();
               ready = true;
-              // Read rest of stream to satisfy zlib
-              while (is.Take() != '\0');
             } else {
               std::string message = is.GetCache();
               is.SetCache(false);
@@ -512,7 +510,11 @@ namespace SleepyDiscord {
 
 	void BaseDiscordClient::processMessage(const std::string &message) {
 		rapidjson::Document document;
-		document.Parse(message.c_str(), message.length());
+		rapidjson::ParseResult result = document.Parse(message.c_str(), message.length());
+		if (!result) {
+		  printf("Parsing error %u\n", result.Code());
+		  return;
+		}
 		//json::Values values = json::getValues(message.c_str(),
 		//	{ "op", "d", "s", "t" });
 		int op = document["op"].GetInt();
