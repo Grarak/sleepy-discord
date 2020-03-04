@@ -70,6 +70,7 @@ namespace SleepyDiscord {
 	}
 
 	void VoiceConnection::processMessage(const std::string &message) {
+	        printf("Voice receive %s\n", message.c_str());
 		//json::Values values = json::getValues(message.c_str(),
 		//	{ "op", "d" });
 		rapidjson::Document values;
@@ -147,7 +148,7 @@ namespace SleepyDiscord {
 			break;
 		case SPEAKING: {
 			uint32_t ssrc = d["ssrc"].GetUint();
-            Snowflake<User> user_id = d["user_id"];
+                        Snowflake<User> user_id = d["user_id"];
 
 			userSSRCs[user_id.number()] = ssrc;
 			}

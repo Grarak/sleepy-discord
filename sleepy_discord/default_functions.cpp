@@ -91,7 +91,7 @@ namespace SleepyDiscord {
 
 	}
 
-	void BaseDiscordClient::onEditVoiceState(VoiceState& state) {
+	void BaseDiscordClient::onEditVoiceState(const VoiceState& state) {
 
 	}
 
@@ -190,7 +190,7 @@ namespace SleepyDiscord {
 	
 	}
 	
-	void BaseDiscordClient::fileRead(const char* path, std::string*const file) {
+	void BaseDiscordClient::fileRead(const char* path, const std::string* file) {
 
 	}
 

@@ -382,11 +382,11 @@ namespace SleepyDiscord {
 #endif
 
 		//Caching
-		std::shared_ptr<ServerCache> createServerCache();
+		/*std::shared_ptr<ServerCache> createServerCache();
 		void setServerCache(std::shared_ptr<ServerCache> cache);
 		inline std::shared_ptr<ServerCache>& getServerCache() {
 			return serverCache;
-		}
+		}*/
 
 	protected:
 		//Rest events
@@ -456,7 +456,7 @@ namespace SleepyDiscord {
 		virtual void onEditUser          (User               user       );
 		virtual void onEditUserNote      (const json::Value& jsonMessage);
 		virtual void onEditUserSettings  (const json::Value& jsonMessage);
-		virtual void onEditVoiceState    (VoiceState&        state      );
+		virtual void onEditVoiceState    (const VoiceState&  state      );
 		virtual void onTyping            (Snowflake<Channel> channelID, Snowflake<User> userID, time_t timestamp);
 		virtual void onDeleteMessages    (Snowflake<Channel> channelID, std::vector<Snowflake<Message>> messages);
 		virtual void onEditMessage       (MessageRevisions   revisioins );
@@ -483,7 +483,7 @@ namespace SleepyDiscord {
 		virtual void onRestart() {}
 		virtual void onResponse(Response response);
 		virtual void sleep(const unsigned int milliseconds);  //Deprecated, use schedule instead
-		virtual void fileRead(const char* path, std::string*const file);
+		virtual void fileRead(const char* path, const std::string* file);
 		virtual void tick(float deltaTime);
 		virtual void onError(ErrorCode errorCode, const std::string errorMessage);
 
@@ -494,8 +494,8 @@ namespace SleepyDiscord {
 		void processCloseCode(const int16_t code) override;
 		void heartbeat();
 		void sendHeartbeat();
-		inline std::string getToken() { return *token.get(); }
-		void start(const std::string _token, const char maxNumOfThreads = DEFAULT_THREADS, int _shardID = 0, int _shardCount = 0);
+		inline std::string getToken() { return token; }
+		void start(const std::string& _token, const char maxNumOfThreads = DEFAULT_THREADS, int _shardID = 0, int _shardCount = 0);
 		virtual bool connect(
 			const std::string & /*uri*/,                    //IN
 			GenericMessageReceiver* /*messageProcessor*/,   //IN  When a message is receved, this will process it
@@ -555,7 +555,7 @@ namespace SleepyDiscord {
 		};
 	 private:
 
-		std::unique_ptr<std::string> token;		//stored in a unique_ptr so that you can't see it in the debugger
+		std::string token;		//stored in a unique_ptr so that you can't see it in the debugger
 		std::string sessionID;	//TODO: replace this with a Ready object
 		int shardID = 0;
 		int shardCount = 0;
@@ -569,12 +569,12 @@ namespace SleepyDiscord {
 		Timer reconnectTimer;
 		void sendIdentity();
 		void sendResume();
-		void disconnectWebsocket(unsigned int code, const std::string reason = "");
+		void disconnectWebsocket(unsigned int code, const std::string& reason = "");
 		bool sendL(std::string message);    //the L stands for Limited
 		int64_t nextHalfMin = 0;
 
 		//Cache
-		std::shared_ptr<ServerCache> serverCache;
+		//std::shared_ptr<ServerCache> serverCache;
 
 		//rate limiting
 		int8_t messagesRemaining = 0;
@@ -597,7 +597,7 @@ namespace SleepyDiscord {
 		void connectToVoiceIfReady(VoiceContext& context);
 #endif
 
-		template<class Callback>
+		/*template<class Callback>
 		void findServerInCache(Snowflake<Server>& serverID, Callback onSuccessCallback) {
 			if (serverCache) {
 				ServerCache::iterator server = serverCache->findServer(serverID);
@@ -668,7 +668,7 @@ namespace SleepyDiscord {
 					(server.*(container)).erase(found);
 				}
 			);
-		}
+		}*/
 	};
 
 	//inline BaseDiscordClient::AssignmentType operator|(BaseDiscordClient::AssignmentType left, BaseDiscordClient::AssignmentType right) {

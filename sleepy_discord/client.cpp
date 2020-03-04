@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <functional>
+#include <memory>
 #include <sstream>
 #include <iomanip>
 #include <ctime>
@@ -17,7 +18,7 @@
 #endif
 
 namespace SleepyDiscord {
-	void BaseDiscordClient::start(const std::string _token, const char maxNumOfThreads, int _shardID, int _shardCount) {
+	void BaseDiscordClient::start(const std::string& _token, const char maxNumOfThreads, int _shardID, int _shardCount) {
 		if (!scheduleHandler) {
 			setError(CANT_SCHEDULE);
 			return;
@@ -26,7 +27,7 @@ namespace SleepyDiscord {
 		ready = false;
 		quiting = false;
 		bot = true;
-		token = std::unique_ptr<std::string>(new std::string(_token)); //add client to list
+		token = _token; //add client to list
 		if (_shardID != 0 || _shardCount != 0)
 			setShardID(_shardID, _shardCount);
 
@@ -173,7 +174,7 @@ namespace SleepyDiscord {
 		return Route(source, values);
 	}
 
-	std::shared_ptr<ServerCache> BaseDiscordClient::createServerCache() {
+	/*std::shared_ptr<ServerCache> BaseDiscordClient::createServerCache() {
 		setServerCache(std::make_shared<ServerCache>());
 		return getServerCache();
 	}
@@ -182,7 +183,7 @@ namespace SleepyDiscord {
 		serverCache = cache;
 		if ((ready || !isBot()) && serverCache->size() == 0)
 			*serverCache = getServers().get<Cache>();
-	}
+	}*/
 
 	void BaseDiscordClient::onDepletedRequestSupply(const Route::Bucket&, time_t) {
 	}
@@ -367,7 +368,7 @@ namespace SleepyDiscord {
 		++consecutiveReconnectsCount;
 	}
 
-	void BaseDiscordClient::disconnectWebsocket(unsigned int code, const std::string reason) {
+	void BaseDiscordClient::disconnectWebsocket(unsigned int code, const std::string& reason) {
 		disconnect(code, reason, connection);
 		onDisconnect();
 	}
@@ -537,24 +538,24 @@ namespace SleepyDiscord {
 			case hash("RESUMED"                    ): onResumed            (); break;
 			case hash("GUILD_CREATE"               ): {
 				Server server(d);
-				if (serverCache)
-					serverCache->insert(server);
+				/*if (serverCache)
+					serverCache->insert(server);*/
 				onServer(server);
 				} break;
 			case hash("GUILD_DELETE"               ): {
 				UnavailableServer server(d);
-				if (serverCache) {
+				/*if (serverCache) {
 					findServerInCache(server.ID, [=](ServerCache::iterator& found) {
 						serverCache->erase(found);
 					});
-				}
+				}*/
 				onDeleteServer(server);
 				} break;
 			case hash("GUILD_UPDATE"               ): {
 				Server server(d);
-				accessServerFromCache(server.ID, [server](Server& foundServer) {
+				/*accessServerFromCache(server.ID, [server](Server& foundServer) {
 					foundServer = server;
-				});
+				});*/
 				onEditServer(server);
 				} break;
 			case hash("GUILD_BAN_ADD"              ): onBan  (d["guild_id"], d["user"]); break;
@@ -563,13 +564,13 @@ namespace SleepyDiscord {
 			case hash("GUILD_MEMBER_ADD"           ): {
 				Snowflake<Server> serverID = d["guild_id"];
 				ServerMember member(d);
-				appendObjectToCache(serverID, &Server::members, member);
+				//appendObjectToCache(serverID, &Server::members, member);
 				onMember(serverID, member);
 				} break;
 			case hash("GUILD_MEMBER_REMOVE"        ): {
 				Snowflake<Server> serverID = d["guild_id"];
 				User user = d["user"];
-				eraseObjectFromCache(serverID, &Server::members, user.ID);
+				//eraseObjectFromCache(serverID, &Server::members, user.ID);
 				onRemoveMember(serverID, user);
 				} break;
 			case hash("GUILD_MEMBER_UPDATE"        ): {
@@ -578,57 +579,57 @@ namespace SleepyDiscord {
 				std::vector<Snowflake<Role>> roles = json::toArray<Snowflake<Role>>(d["roles"]);
 				const json::Value& nickValue = d["nick"];
 				std::string nick = nickValue.IsString() ? json::toStdString(d["nick"]) : "";
-				accessObjectFromCache(serverID, &Server::members, user.ID,
+				/*accessObjectFromCache(serverID, &Server::members, user.ID,
 					[user, roles, nick](Server&, ServerMember& member) {
 						member.user = user;
 						member.roles = roles;
 						member.nick = nick;
 					}
-				);
+				);*/
 				onEditMember(serverID, user, roles, nick);
 				} break;
 			case hash("GUILD_MEMBERS_CHUNK"        ): onMemberChunk       (d["guild_id"], json::toArray<ServerMember>(d["members"])); break;
 			case hash("GUILD_ROLE_CREATE"          ): {
 				Snowflake<Server> serverID = d["guild_id"];
 				Role role = d["role"];
-				appendObjectToCache(serverID, &Server::roles, role);
+				//appendObjectToCache(serverID, &Server::roles, role);
 				onRole(serverID, role);
 				} break;
 			case hash("GUILD_ROLE_UPDATE"):
 			{
 				Snowflake<Server> serverID = d["guild_id"];
 				Role role = d["role"];
-				accessObjectFromCache(serverID, &Server::roles, role.ID,
+				/*accessObjectFromCache(serverID, &Server::roles, role.ID,
 					[role](Server&, Role& foundRole) {
 						foundRole = role;
 					}
-				);
+				);*/
 				onEditRole(serverID, role);
 			} break;
 			case hash("GUILD_ROLE_DELETE"          ): {
 				Snowflake<Server> serverID = d["guild_id"];
 				Snowflake<Role> roleID = d["role_id"];
-				eraseObjectFromCache(serverID, &Server::roles, roleID);
+				//eraseObjectFromCache(serverID, &Server::roles, roleID);
 				onDeleteRole(serverID, roleID);
 				} break;
 			case hash("GUILD_EMOJIS_UPDATE"        ): onEditEmojis        (d["guild_id"], json::toArray<Emoji>(d["emojis"])); break;
 			case hash("CHANNEL_CREATE"             ): {
 				Channel channel = d;
-				appendObjectToCache(channel.serverID, &Server::channels, channel);
+				//appendObjectToCache(channel.serverID, &Server::channels, channel);
 				onChannel(d);
 				} break;
 			case hash("CHANNEL_UPDATE"             ): {
 				Channel channel = d;
-				accessObjectFromCache(channel.serverID, &Server::channels, channel.ID,
+				/*accessObjectFromCache(channel.serverID, &Server::channels, channel.ID,
 					[channel](Server&, Channel& foundChannel) {
 						foundChannel = channel;
 					}
-				);
+				);*/
 				onEditChannel(d);
 				} break;
 			case hash("CHANNEL_DELETE"             ): {
 				Channel channel = d;
-				eraseObjectFromCache(channel.serverID, &Server::channels, channel.ID);
+				//eraseObjectFromCache(channel.serverID, &Server::channels, channel.ID);
 				onDeleteChannel(d);
 				} break;
 			case hash("CHANNEL_PINS_UPDATE"): {

@@ -36,8 +36,8 @@ namespace SleepyDiscord {
 		//Ready(const json::Values values);
 		int v;	//gateway protocol version
 		User user;
-		std::list<Channel> privateChannels;
-		std::list<UnavailableServer> servers;
+		//std::list<Channel> privateChannels;
+		//std::list<UnavailableServer> servers;
 		std::string sessionID;
 		//std::vector<std::string> trace;
 		std::array<int, 2> shard = { {0, 1} };
@@ -46,8 +46,8 @@ namespace SleepyDiscord {
 			std::make_tuple(
 				json::pair                           (&Ready::v              , "v"               , json::REQUIRIED_FIELD),
 				json::pair                           (&Ready::user           , "user"            , json::REQUIRIED_FIELD),
-				json::pair<json::ContainerTypeHelper>(&Ready::privateChannels, "private_channels", json::REQUIRIED_FIELD),
-				json::pair<json::ContainerTypeHelper>(&Ready::servers        , "guilds"          , json::REQUIRIED_FIELD),
+				//json::pair<json::ContainerTypeHelper>(&Ready::privateChannels, "private_channels", json::REQUIRIED_FIELD),
+				//json::pair<json::ContainerTypeHelper>(&Ready::servers        , "guilds"          , json::REQUIRIED_FIELD),
 				json::pair                           (&Ready::sessionID      , "session_id"      , json::REQUIRIED_FIELD),
 				//This doesn't work anymore
 				//json::pair(&Ready::trace          , json::toArray<std::string>      , "_trace"          , json::REQUIRIED_FIELD),

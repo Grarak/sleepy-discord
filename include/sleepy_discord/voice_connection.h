@@ -245,6 +245,10 @@ namespace SleepyDiscord {
 
 		void disconnect();
 
+		inline const std::map<int64_t, uint32_t>& getUserSSRCs() const {
+		  return userSSRCs;
+		}
+
 	private:
 		friend BaseDiscordClient;
 

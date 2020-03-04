@@ -1,7 +1,7 @@
 #pragma once
 #include "discord_object_interface.h"
 #include "snowflake.h"
-#include "channel.h"
+#include "server_member.h"
 
 namespace SleepyDiscord {
 	//forward declearion
@@ -24,6 +24,8 @@ namespace SleepyDiscord {
 		bool selfDeaf = false;
 		bool selfMute = false;
 		bool suppress = false;
+                ServerMember serverMember;
+
 		JSONStructStart
 			std::make_tuple(
 				json::pair(&VoiceState::serverID , "guild_id"  , json::OPTIONAL_FIELD ),
@@ -34,7 +36,8 @@ namespace SleepyDiscord {
 				json::pair(&VoiceState::mute     , "mute"      , json::REQUIRIED_FIELD),
 				json::pair(&VoiceState::selfDeaf , "self_deaf" , json::REQUIRIED_FIELD),
 				json::pair(&VoiceState::selfMute , "self_mute" , json::REQUIRIED_FIELD),
-				json::pair(&VoiceState::suppress , "suppress"  , json::REQUIRIED_FIELD)
+				json::pair(&VoiceState::suppress , "suppress"  , json::REQUIRIED_FIELD),
+                                json::pair(&VoiceState::serverMember , "member"  , json::OPTIONAL_FIELD)
 			);
 		JSONStructEnd
 	};
